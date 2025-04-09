@@ -1,11 +1,24 @@
-import pickle
+from flask import Flask, render_template, request
 import numpy as np
-from flask import Flask, request, render_template
+import joblib
+import os
 
-# Load model and scaler
-with open('models/breast_cancer_svm.pkl', 'rb') as file:
-    model, scaler = pickle.load(file)  # Unpack model and scaler
+# Load the trained model and scaler
+model_data = joblib.load('models/svm_breast_cancer_model.pkl')
+scaler = model_data['scaler']
+model = model_data['model']
 
+# Feature names (must match form input names)
+feature_names = [
+    'mean_radius', 'mean_texture', 'mean_perimeter', 'mean_area', 'mean_smoothness',
+    'mean_compactness', 'mean_concavity', 'mean_concave_points', 'mean_symmetry', 'mean_fractal_dimension',
+    'radius_error', 'texture_error', 'perimeter_error', 'area_error', 'smoothness_error',
+    'compactness_error', 'concavity_error', 'concave_points_error', 'symmetry_error', 'fractal_dimension_error',
+    'worst_radius', 'worst_texture', 'worst_perimeter', 'worst_area', 'worst_smoothness',
+    'worst_compactness', 'worst_concavity', 'worst_concave_points', 'worst_symmetry', 'worst_fractal_dimension'
+]
+
+# Initialize Flask app
 app = Flask(__name__)
 
 @app.route('/')
@@ -15,27 +28,19 @@ def home():
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
-        # Get input values and convert to array
-        data = [float(x) for x in request.form.values()]
-        features = np.array([data])
-        
-        # Scale input data
-        scaled_features = scaler.transform(features)  
+        # Extract input values from the form using the feature names
+        input_data = [float(request.form[feature]) for feature in feature_names]
+        input_array = np.array([input_data])  # Shape (1, 30)
 
-        # Make prediction
-        prediction = model.predict(scaled_features)[0]
+        # Scale and predict
+        scaled_input = scaler.transform(input_array)
+        prediction = model.predict(scaled_input)
 
-        result = "Malignant (Cancerous)" if prediction == 1 else "Benign (Non-Cancerous)"
-        
-        return render_template('index.html', prediction_text=f'Prediction: {result}')
-    
+        result = 'Malignant' if prediction[0] == 0 else 'Benign'
+        return render_template('index.html', prediction_text=f'The tumor is likely: {result}')
     except Exception as e:
-        return str(e)
-
-import os
+        return render_template('index.html', prediction_text=f'Error: {str(e)}')
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
-
-
+    port = int(os.environ.get("PORT", 10000))  # default to 10000
+    app.run(debug=True, port=port)
